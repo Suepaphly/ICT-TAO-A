@@ -1,0 +1,127 @@
+//---------------------------------------------------------------------------
+#include <vcl.h>
+#pragma hdrstop
+
+#include "Unit1.h"
+#include "Unit2.h"
+extern HANDLE hCom1;
+extern DWORD dwAct;
+#include "rs232.h"
+extern Rs232 rs232;
+
+#pragma package(smart_init)
+//---------------------------------------------------------------------------
+//   Important: Methods and properties of objects in VCL can only be
+//   used in a method called using Synchronize, for example:
+//
+//      Synchronize(UpdateCaption);
+//
+//   where UpdateCaption could look like:
+//
+//      void __fastcall RS232::UpdateCaption()
+//      {
+//        Form1->Caption = "Updated in a thread";
+//      }
+//---------------------------------------------------------------------------
+__fastcall RS232::RS232(bool CreateSuspended)
+        : TThread(CreateSuspended)
+{
+}
+//---------------------------------------------------------------------------
+void ReadPortCom1()
+{
+  unsigned char InBuff[5000];
+  DWORD dwBytesRead;
+  AnsiString str;
+
+  ReadFile(hCom1,InBuff,4999,&dwBytesRead,NULL);
+  if(dwBytesRead==0)
+    return;
+
+  for(unsigned int n=0;n<dwBytesRead;n++)
+  {
+    if((InBuff[n]==0x80)||(InBuff[n]==0x8F))
+    {
+      str="收到開機碼[0x";
+      str+=IntToHex(InBuff[n],2);
+      str+="]";
+      Form1->Memo1->Lines->Add(str);
+      rs232.TransferComm(hCom1,0x02);
+      Form1->Memo1->Lines->Add("送出回應碼");
+      Form1->Inhibit->Checked=false;
+      Form1->Uninhibit->Checked=true;
+    }
+    if(InBuff[n]==0x20)
+      Form1->Memo1->Lines->Add("馬達故障");
+    if(InBuff[n]==0x21)
+      Form1->Memo1->Lines->Add("Sersor故障");
+    if(InBuff[n]==0x22)
+      Form1->Memo1->Lines->Add("卡鈔");
+    if(InBuff[n]==0x23)
+      Form1->Memo1->Lines->Add("釣魚");
+    if(InBuff[n]==0x24)
+      Form1->Memo1->Lines->Add("錢箱異常");
+    if(InBuff[n]==0x25)
+      Form1->Memo1->Lines->Add("通訊錯誤");
+    if(InBuff[n]==0x2F)
+      Form1->Memo1->Lines->Add("回復正常");
+    if(InBuff[n]==0x81)
+    {
+      switch(InBuff[n+1])
+      {
+        case 0x40: Form1->Memo1->Lines->Add("收到第一種幣值");
+                   break;
+        case 0x41: Form1->Memo1->Lines->Add("收到第二種幣值");
+                   break;
+        case 0x42: Form1->Memo1->Lines->Add("收到第三種幣值");
+                   break;
+        case 0x43: Form1->Memo1->Lines->Add("收到第四種幣值");
+                   break;
+        case 0x44: Form1->Memo1->Lines->Add("收到第五種幣值");
+                   break;
+      }
+      if(Form1->Accept->Checked)
+      {
+        rs232.TransferComm(hCom1,0x02);
+        Form1->Memo1->Lines->Add("送出接收碼");
+      }
+      else if(Form1->Reject->Checked)
+      {
+        rs232.TransferComm(hCom1,0x0F);
+        Form1->Memo1->Lines->Add("送出拒收碼");
+      }
+      else if(Form1->User->Checked)
+      {
+        if(MessageBox(NULL,"是否要接收這一張鈔票?","訊息",MB_YESNO)==IDYES)
+        {
+          rs232.TransferComm(hCom1,0x02);
+          Form1->Memo1->Lines->Add("送出接收碼");
+        }
+        else
+        {
+          rs232.TransferComm(hCom1,0x0F);
+          Form1->Memo1->Lines->Add("送出拒收碼");
+        }
+      }
+    }
+  }
+}
+
+void __fastcall RS232::Execute()
+{
+        //---- Place thread code here ----
+  DWORD dwErrorCom1;
+  COMSTAT  csCom1;
+
+  FreeOnTerminate=true;
+  SetCommMask(hCom1,EV_RXCHAR);
+  while(1)
+  {
+    if(Terminated)
+      return;
+    ClearCommError(hCom1,&dwErrorCom1,&csCom1);
+    if(csCom1.cbInQue)
+      ReadPortCom1();
+  }
+}
+//---------------------------------------------------------------------------

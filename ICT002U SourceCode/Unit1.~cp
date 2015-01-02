@@ -1,0 +1,104 @@
+//---------------------------------------------------------------------------
+#include <vcl.h>
+#include <stdlib.h>
+#pragma hdrstop
+
+#include "Unit1.h"
+#include "Unit2.h"
+//---------------------------------------------------------------------------
+#pragma package(smart_init)
+#pragma resource "*.dfm"
+TForm1 *Form1;
+HANDLE hCom1;
+COMMTIMEOUTS toCom1;
+DWORD dwAct;
+RS232 *ReadThread;
+#include "rs232.h"
+Rs232 rs232;
+//---------------------------------------------------------------------------
+__fastcall TForm1::TForm1(TComponent* Owner)
+        : TForm(Owner)
+{
+}
+//---------------------------------------------------------------------------
+
+void __fastcall TForm1::AboutClick(TObject *Sender)
+{
+  Memo1->Lines->LoadFromFile("readme.txt");
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::ClearClick(TObject *Sender)
+{
+  Memo1->Lines->Clear();
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::AcceptClick(TObject *Sender)
+{
+  Accept->Checked=true;
+  Reject->Checked=false;
+  User->Checked=false;
+  Memo1->Lines->Add("模式: 總是接收");
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::RejectClick(TObject *Sender)
+{
+  Accept->Checked=false;
+  Reject->Checked=true;
+  User->Checked=false;
+  Memo1->Lines->Add("模式: 總是拒收");
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::UserClick(TObject *Sender)
+{
+  Accept->Checked=false;
+  Reject->Checked=false;
+  User->Checked=true;
+  Memo1->Lines->Add("模式: 使用者決定");
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::InhibitClick(TObject *Sender)
+{
+  Inhibit->Checked=true;
+  Uninhibit->Checked=false;
+  rs232.TransferComm(hCom1,94);
+  Memo1->Lines->Add("送出禁能碼");
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::UninhibitClick(TObject *Sender)
+{
+  Inhibit->Checked=false;
+  Uninhibit->Checked=true;
+  rs232.TransferComm(hCom1,62);
+  Memo1->Lines->Add("送出致能碼");
+}
+//---------------------------------------------------------------------------
+void __fastcall TForm1::FormCreate(TObject *Sender)
+{
+  AnsiString COMM,BAUD;
+  TStrings *list=new TStringList;
+  char *Com,*baud;
+
+  list->LoadFromFile("comm.ini");
+  COMM=list->Strings[1].Delete(1,5).c_str();
+  Com=COMM.c_str();
+  BAUD=list->Strings[2].Delete(1,5).c_str();
+  baud=BAUD.c_str();
+  delete list;
+
+  if(rs232.SetComPort(hCom1,toCom1,Com,baud))
+    ReadThread=new RS232(false);
+  else
+  {
+    ShowMessage("The COM1 open error !");
+    exit(0);
+  }
+}
+//---------------------------------------------------------------------------
+
+void __fastcall TForm1::FormClose(TObject *Sender, TCloseAction &Action)
+{
+  rs232.Exit(hCom1);
+  exit(0);
+}
+//---------------------------------------------------------------------------
+
